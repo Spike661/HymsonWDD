@@ -1,0 +1,21 @@
+LIBRARY WDD
+EXPORTS
+gmc_cmd_test
+gmc_connect_cmd
+gmc_get_lib_version
+gmc_get_fpga_version
+ConnectedDevice
+CloseDevice
+ConfigureADCParameters
+SetDACParameters
+StartADCCollection
+StopADCCollection
+TryReadADCData
+SetIoOutput
+GetIoInput
+SetFilterTime
+SetTriggerIo
+SetSampResistor
+
+
+
