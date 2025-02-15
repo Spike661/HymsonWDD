@@ -31,6 +31,7 @@
 #define IDC_LIST3                       1048
 #define IDC_RESISTOR1                   1048
 #define IDC_LIST4                       1049
+#define IDC_SET_DAC_PARA2               1049
 #define IDC_LIST5                       1050
 #define IDC_EDIT3                       1051
 #define IDC_DAC1                        1051
@@ -59,6 +60,8 @@
 #define IDC_SC_STATUS                   1069
 #define IDC_READ_COUNT                  1070
 #define IDC_PICTURE                     1071
+#define IDC_DRAWING                     1074
+#define IDC_RAWDATA                     1075
 
 // Next default values for new objects
 // 
@@ -66,7 +69,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        141
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         1072
+#define _APS_NEXT_CONTROL_VALUE         1076
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

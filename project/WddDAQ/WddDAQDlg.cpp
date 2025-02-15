@@ -7,6 +7,9 @@
 #include "WddDAQ.h"
 #include "WddDAQDlg.h"
 #include "afxdialogex.h"
+#include <iomanip> // 用于 std::hex 和 std::dec
+
+
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -50,6 +53,24 @@ double CEditGetDouble(CEdit *pEdit)
 	return _ttof(str);
 }
 
+
+
+void PrintRawData(const unsigned char* read_buffer, size_t size) {
+    CString rawData;
+
+    for (size_t i = 0; i < size; ++i) {
+        // 将每个字节的十六进制值添加到字符串中
+        rawData.AppendFormat(_T("%02X "), static_cast<int>(read_buffer[i]));
+
+        // 每16个字节换行
+        if ((i + 1) % 8 == 0) {
+            rawData.Append(_T("\n"));
+        }
+    }
+
+    // 显示消息框
+    AfxMessageBox(rawData);
+}
 
 
 // 用于应用程序“关于”菜单项的 CAboutDlg 对话框
@@ -100,6 +121,8 @@ void CWddDAQDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_START_ACQUIRE_BTN, m_startAcquireBtn); // 开始采集按钮
 	DDX_Control(pDX, IDC_STOP_ACQUIRE_BTN, m_stopAcquireBtn);   // 停止采集按钮
 	DDX_Control(pDX, IDC_STATUS_EDIT, m_statusEdit);      // 状态显示文本框
+    DDX_Control(pDX, IDC_DRAWING, m_ChartCtrl);
+    DDX_Control(pDX, IDC_RAWDATA, m_editRawData);
 }
 
 BEGIN_MESSAGE_MAP(CWddDAQDlg, CDialogEx)
@@ -121,6 +144,7 @@ BEGIN_MESSAGE_MAP(CWddDAQDlg, CDialogEx)
     ON_BN_CLICKED(IDC_OUT3, &CWddDAQDlg::OnBnClickedOut3)
     ON_BN_CLICKED(IDC_DISPLAY_DATA, &CWddDAQDlg::OnBnClickedDisplayData)
     ON_BN_CLICKED(IDC_CLEAR_DATA, &CWddDAQDlg::OnBnClickedClearData)
+    ON_BN_CLICKED(IDC_SET_DAC_PARA2, &CWddDAQDlg::OnBnClickedSetDacPara2)
 END_MESSAGE_MAP()
 
 
@@ -134,6 +158,17 @@ BOOL CWddDAQDlg::OnInitDialog()
     m_pictureControl.SubclassDlgItem(IDC_PICTURE, this);   // 获取 IDC_PICTURE 控件的指针
 	// 获取指向 IDC_READ_COUNT 文本框的指针
 	pDisplayText = GetDlgItem(IDC_READ_COUNT);
+
+    CChartAxis* pAxis = NULL;
+    pAxis = m_ChartCtrl.CreateStandardAxis(CChartCtrl::BottomAxis);
+    pAxis->SetAutomatic(true);
+    pAxis = m_ChartCtrl.CreateStandardAxis(CChartCtrl::LeftAxis);
+    pAxis->SetAutomatic(true);
+    //添加标题
+    TChartString str1;
+    str1 = _T("采样数据");
+    m_ChartCtrl.GetTitle()->AddString(str1);
+    
 	// IDM_ABOUTBOX 必须在系统命令范围内。
 	ASSERT((IDM_ABOUTBOX & 0xFFF0) == IDM_ABOUTBOX);
 	ASSERT(IDM_ABOUTBOX < 0xF000);
@@ -250,6 +285,7 @@ void UpdateDisplay() {
 	pDisplayText->SetWindowText(str); // 更新文本框
 }
 
+
 // 连接按钮点击事件
 void CWddDAQDlg::OnBnClickedConnect()
 {
@@ -296,9 +332,28 @@ void CWddDAQDlg::OnBnClickedStartAcquire()
 				int rt = TryReadADCData(read_buffer, 1024);
 				if (rt == 0) {
 					readCount++;// 更新计数
+                    size_t bufferSize = sizeof(read_buffer) / sizeof(read_buffer[0]);     // 调用打印函数
+                   // PrintRawData(read_buffer, bufferSize);
+                   // 调用打印函数
+                   // 生成要显示的字符串
+                    CString rawData;
+                    for (size_t i = 0; i < bufferSize; ++i) {
+                        rawData.AppendFormat(_T("%02X "), static_cast<int>(read_buffer[i]));
+
+                        if ((i + 1) % 32 == 0) {
+                            rawData.Append(_T("\r\n")); // 使用 "\r\n" 作为换行符
+                        }
+                    }
+                    // 将生成的字符串设置到编辑控件中
+                    m_editRawData.SetWindowText(rawData);
                     // 将读取的数据转换为整数并存储
-                    for (int i = 0; i < 1024; i++) {
-                        accumulatedData.push_back(static_cast<int>(read_buffer[i]));
+                    for (int i = 0; i < 1024; i += 2) { // 每次增加2，读取一对字节
+                        // 确保不会越界
+                        if (i + 1 < 1024) {
+                            // 根据小端模式组合两个字节
+                            int value = static_cast<int>(read_buffer[i]) | (static_cast<int>(read_buffer[i + 1]) << 8);
+                            accumulatedData.push_back(value);
+                        }
                     }
                     str.Format(_T("%d"), readCount.load());
                     pDisplayText->SetWindowText(str); // 更新文本框
@@ -470,21 +525,74 @@ void CWddDAQDlg::OnBnClickedOut3()
 
 void CWddDAQDlg::OnBnClickedDisplayData()
 {
-    if (!accumulatedData.empty()) {
-        // 请求重绘 IDC_PICTURE 控件
-        m_pictureControl.Invalidate(); // 使控件无效以触发重绘
-        m_pictureControl.UpdateWindow(); // 立即更新窗口
-    }
-    else {
+    //if (!accumulatedData.empty()) {
+    //    // 请求重绘 IDC_PICTURE 控件
+    //    m_pictureControl.Invalidate(); // 使控件无效以触发重绘
+    //    m_pictureControl.UpdateWindow(); // 立即更新窗口
+    //}
+    //else {
+    //    AfxMessageBox(_T("没有可显示的数据！"));
+    //    return; // 退出函数
+    //}
+
+    //double X1Values[10], Y1Values[10];
+    //for (int i = 0; i < 10; i++)
+    //{
+    //    X1Values[i] = i;
+    //    Y1Values[i] = i;
+    //}
+
+    //CChartLineSerie* pLineSerie2;
+
+    //m_ChartCtrl.SetZoomEnabled(true);
+    //m_ChartCtrl.RemoveAllSeries();//先清空
+    //pLineSerie2 = m_ChartCtrl.CreateLineSerie();
+    //pLineSerie2->SetSeriesOrdering(poNoOrdering);//设置为无序
+    //pLineSerie2->SetPoints(X1Values, Y1Values, 10);
+
+    //for (int i = 0; i < 1024; i++) {
+    //    accumulatedData.push_back(static_cast<int>(i));
+    //}
+
+    // 检查 accumulatedData 是否为空
+    if (accumulatedData.empty()) {
         AfxMessageBox(_T("没有可显示的数据！"));
         return; // 退出函数
     }
+
+    // 清空图表
+    m_ChartCtrl.RemoveAllSeries();
+
+    // 准备 X 和 Y 数据
+    int dataSize = accumulatedData.size();
+    std::vector<double> XValues(dataSize);
+    std::vector<double> YValues(dataSize);
+
+    for (int i = 0; i < dataSize; i++)
+    {
+        XValues[i] = static_cast<double>(i); // 假设 X 值为索引
+        YValues[i] = accumulatedData[i]; // Y 值为 accumulatedData 中的数据
+    }
+
+    // 创建并设置数据系列
+    CChartLineSerie* pLineSerie = m_ChartCtrl.CreateLineSerie();
+    pLineSerie->SetSeriesOrdering(poNoOrdering); // 设置为无序
+    pLineSerie->SetPoints(XValues.data(), YValues.data(), dataSize); // 设置点
 }
 
 
 void CWddDAQDlg::OnBnClickedClearData()
 {
     // TODO: 在此添加控件通知处理程序代码
+    // 清空图表
+    m_ChartCtrl.RemoveAllSeries();
     accumulatedData.clear(); // 清空累计数据
 }
 
+
+
+void CWddDAQDlg::OnBnClickedSetDacPara2()
+{
+    // TODO: 在此添加控件通知处理程序代码
+    m_editRawData.SetWindowText(_T(""));  // 设置为空字符串
+}

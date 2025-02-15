@@ -5,7 +5,9 @@
 #pragma once
 #include "WddDAQ.h"  
 #include <vector>
-
+#include ".\ChartCtrl\ChartCtrl.h"
+#include ".\ChartCtrl\ChartTitle.h"
+#include ".\ChartCtrl\ChartLineSerie.h"  //画线头文件
 // CWddDAQDlg 对话框
 // CWddDAQDlg 对话框
 class CWddDAQDlg : public CDialogEx
@@ -15,6 +17,7 @@ public:
     virtual void OnDestroy();
     std::vector<int> accumulatedData; // 用于存储累计的数据
     CStatic m_pictureControl; // 用于显示图表的静态控件
+    CEdit m_editRawData;
 
 #ifdef AFX_DESIGN_TIME
     enum { IDD = IDD_WDDDAQ_DIALOG };
@@ -32,12 +35,13 @@ protected:
     HICON m_hIcon;
 
     // 控件变量
-    CButton m_connectBtn;     // 连接按钮
-    CButton m_disconnectBtn;  // 断开连接按钮
+    CButton m_connectBtn;      // 连接按钮
+    CButton m_disconnectBtn;   // 断开连接按钮
     CButton m_startAcquireBtn; // 开始采集按钮
     CButton m_stopAcquireBtn;  // 停止采集按钮
-    CEdit m_statusEdit;      // 状态显示文本框
-    
+    CEdit m_statusEdit;        // 状态显示文本框
+ 
+    CChartCtrl m_ChartCtrl;
 
     afx_msg void OnBnClickedConnect();
     afx_msg void OnBnClickedDisconnect();
@@ -61,4 +65,5 @@ public:
 
     afx_msg void OnBnClickedDisplayData();
     afx_msg void OnBnClickedClearData();
+    afx_msg void OnBnClickedSetDacPara2();
 };
