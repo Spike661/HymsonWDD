@@ -1,9 +1,9 @@
 #ifndef	_VERSION_NO_H__
 #define	_VERSION_NO_H__
 
-#define LIB_VERSION     0x24082201
-#define NO_PRODUCTVER   24,08,22,01
-#define STR_PRODUCTVER  "24.08.22.01"
+#define LIB_VERSION     0x25032401
+#define NO_PRODUCTVER   25,03,24,01
+#define STR_PRODUCTVER  "25.03.24.01"
 #define NO_FILEVER       1,0,0,1
 #define STR_FILEVER     "1.0.0.1"
 #define STR_PRODUCTNAME "Hymson WDD"
