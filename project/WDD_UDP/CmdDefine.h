@@ -27,7 +27,7 @@ typedef struct {
 	uint8_t data[1400];		//数据
 }T_COMMAND;
 #define CMD_HEAD  (12)		 //头信息4byte对齐
-#define DATA_LENGTH  (1024)		 //头信息4byte对齐
+#define DATA_LENGTH  (1024)		 //数据长度
 
 enum CmdType
 {

@@ -1,6 +1,8 @@
 ﻿// MSocket.cpp: 实现文件
 #pragma comment(lib, "ws2_32.lib")
 
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+
 #include <string>
 #include <iostream>
 #include <WinSock2.h>
@@ -40,6 +42,26 @@ short MSocket::CsConnect(char *addr, short port)
     }
     // 创建UDP套接字
     sc = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    // 设置超时时间
+    struct timeval timeout;
+    timeout.tv_sec = 5000;      // 设置超时时间为 5 s,单位：ms
+    timeout.tv_usec = 0;        // 微秒设置为 0
+    // 设置套接字选项，应用超时设置
+    if (setsockopt(sc, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout)) < 0) {
+        perror("setsockopt failed.\n");
+        return -1;
+    }
+    // 设置UDP接收缓冲区大小，windows默认8K
+    int nRecvBuf = 1024000;//设置为1M
+    if (setsockopt(sc, SOL_SOCKET, SO_RCVBUF, (const char*)&nRecvBuf, sizeof(int)) < 0) {
+        perror("setsockopt buf size failed.\n");
+        return -1;
+    }
+
+    socklen_t valSize = sizeof(nRecvBuf);
+    getsockopt(sc, SOL_SOCKET, SO_RCVBUF, (char*)&nRecvBuf, &valSize);
+    DEBUG("socket size: %d\n", nRecvBuf);
+
     if (sc == INVALID_SOCKET) {
         return 1;
     }
@@ -85,17 +107,6 @@ short MSocket::RecvData(char *ch)
 
     sockaddr_in from;
     int fromLen = sizeof(from);
-
-     // 设置超时时间
-    struct timeval timeout;
-    timeout.tv_sec = 5000;      // 设置超时时间为 5 s,单位：ms
-    timeout.tv_usec = 0;        // 微秒设置为 0
-    setsockopt(sc, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
-    // 设置套接字选项，应用超时设置
-    if (setsockopt(sc, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
-        perror("setsockopt failed");
-        return -1;
-    }
 
     rtn = recvfrom(sc, rcvbuf, bufferSize, 0, (sockaddr*)&from, &fromLen);
 

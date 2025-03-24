@@ -133,6 +133,7 @@ BEGIN_MESSAGE_MAP(CWddDAQDlg, CDialogEx)
 	ON_WM_SYSCOMMAND()
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
+    ON_WM_MOUSEWHEEL()
 	ON_BN_CLICKED(IDC_SETT_ACQPARA, &CWddDAQDlg::OnBnClickedSettAcqpara)
 	ON_BN_CLICKED(IDC_SET_FILTER_TIME, &CWddDAQDlg::OnBnClickedSetFilterTime)
 	ON_BN_CLICKED(IDC_SET_TRIGER_IO, &CWddDAQDlg::OnBnClickedSetTrigerIo)
@@ -169,6 +170,15 @@ BOOL CWddDAQDlg::OnInitDialog()
     str1 = _T("采样数据");
     m_ChartCtrl.GetTitle()->AddString(str1);
     
+    // 设置初始显示范围
+    m_xMin = 0;
+    m_xMax = 100;
+    m_yMin = 0;
+    m_yMax = 100;
+
+    // 设置轴范围
+    SetAxisRange(m_xMin, m_xMax, m_yMin, m_yMax);
+
 	// IDM_ABOUTBOX 必须在系统命令范围内。
 	ASSERT((IDM_ABOUTBOX & 0xFFF0) == IDM_ABOUTBOX);
 	ASSERT(IDM_ABOUTBOX < 0xF000);
@@ -213,6 +223,52 @@ BOOL CWddDAQDlg::OnInitDialog()
 	//m_nTimerID = SetTimer(1, 100, nullptr); // 保存定时器ID
 
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
+}
+/********************************************************************************************************************************************************************
+                                                                        图表缩放
+********************************************************************************************************************************************************************/
+void CWddDAQDlg::SetAxisRange(double xMin, double xMax, double yMin, double yMax)
+{
+    // 设置 X 轴范围
+    CChartAxis* pXAxis = m_ChartCtrl.GetBottomAxis();
+    if (pXAxis) {
+        pXAxis->SetMinMax(xMin, xMax);
+    }
+
+    // 设置 Y 轴范围
+    CChartAxis* pYAxis = m_ChartCtrl.GetLeftAxis();
+    if (pYAxis) {
+        pYAxis->SetMinMax(yMin, yMax);
+    }
+
+    // 刷新图表
+    m_ChartCtrl.RefreshCtrl();
+}
+
+BOOL CWddDAQDlg::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
+{
+    // 计算缩放比例
+    double zoomFactor = 1.1; // 每次滚动的缩放比例
+    if (zDelta > 0) {
+        // 放大
+        m_xMin *= zoomFactor;
+        m_xMax *= zoomFactor;
+        m_yMin *= zoomFactor;
+        m_yMax *= zoomFactor;
+    }
+    else {
+        // 缩小
+        m_xMin /= zoomFactor;
+        m_xMax /= zoomFactor;
+        m_yMin /= zoomFactor;
+        m_yMax /= zoomFactor;
+    }
+
+    // 设置新的显示范围
+    SetAxisRange(m_xMin, m_xMax, m_yMin, m_yMax);
+
+    // 调用基类的实现
+    return CDialogEx::OnMouseWheel(nFlags, zDelta, pt);
 }
 
 void CWddDAQDlg::OnSysCommand(UINT nID, LPARAM lParam)

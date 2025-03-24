@@ -33,6 +33,7 @@
 #define IDC_LIST4                       1049
 #define IDC_SET_DAC_PARA2               1049
 #define IDC_LIST5                       1050
+#define IDC_SET_DAC_PARA3               1050
 #define IDC_EDIT3                       1051
 #define IDC_DAC1                        1051
 #define IDC_EDIT4                       1052

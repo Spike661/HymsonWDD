@@ -21,7 +21,7 @@ typedef struct {
 	uint32_t Rate;		//采样率，Hz
 	uint32_t SampTime;	//时间采样模式下，采样时间
 	uint32_t SampNum;	//采样点数
-	uint32_t Status;	//采样状态，0:未开启; 1:开启
+	uint32_t Status;	//采集状态，0:未开启; 1:开启
 }SampPara;
 extern SampPara tSampPrm;
 
@@ -31,7 +31,7 @@ extern SampPara tSampPrm;
 // LIB库版本号  [24082201]十六进制，年-月-日-版本
 short _stdcall gmc_get_lib_version(uint32_t *version);
 // FPGA库版本号  [24082201]十六进制，年-月-日-版本
-short _stdcall gmc_get_fpga_version(uint32_t *fpga);
+short _stdcall gmc_get_fpga_version(uint32_t *fpgaversion);
 
 // 连接设备
 short _stdcall ConnectedDevice();
@@ -48,7 +48,7 @@ short _stdcall StartADCCollection();
 // 停止采集
 short _stdcall StopADCCollection();
 // 读取缓冲区数据
-short _stdcall TryReadADCData(unsigned char *read_buffer, uint32_t read_size); //默认1024
+short _stdcall TryReadADCData(unsigned char* readbuffer, uint32_t readsize); //默认1024
 // 设置IO输出, IO按位输出函数index[0,15] value[0关闭,1打开] 
 short _stdcall SetIoOutput(int index, int value);
 // 获取IO输入状态
@@ -58,7 +58,7 @@ short _stdcall SetFilterTime(int time);
 // 设置触发IO，index[0,7] enable[0关闭,1打开]
 short _stdcall SetTriggerIo(int index, uint8_t enable);
 // 设置采样电阻，Resistor[3],三路电阻值[1-8]
-short _stdcall SetSampResistor(uint8_t Resistor[3]);
+short _stdcall SetSampResistor(uint8_t resistor[3]);
 
 		
 #ifdef __cplusplus

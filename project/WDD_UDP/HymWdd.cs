@@ -7,7 +7,11 @@ namespace Hymmc.WDD
     {
         // LIB库版本号  [24082201]十六进制，年-月-日-版本
         [DllImport("wdd.dll", EntryPoint = "gmc_get_lib_version", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
-        public static extern short gmc_get_lib_version(ref uint version);
+        public static extern short gmc_get_lib_version(out uint version);
+
+        // FPGA库版本号  [24082201]十六进制，年-月-日-版本
+        [DllImport("wdd.dll", EntryPoint = "gmc_get_fpga_version", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
+        public static extern short gmc_get_fpga_version(out uint fpgaversion);
 
         // 连接设备
         [DllImport("wdd.dll", EntryPoint = "ConnectedDevice", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
@@ -25,7 +29,7 @@ namespace Hymmc.WDD
 
         // 设置DAC1, DAC2, DAC3, DAC4; 四个通道的DA值
         [DllImport("wdd.dll", EntryPoint = "SetDACParameters", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
-        public static extern short SetDACParameters(UInt16[] DA);
+        public static extern short SetDACParameters(int[] DA);
 
         // 开始采集
         [DllImport("wdd.dll", EntryPoint = "StartADCCollection", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
@@ -38,7 +42,7 @@ namespace Hymmc.WDD
         // 读取缓冲区数据；
         // 默认1024
         [DllImport("wdd.dll", EntryPoint = "TryReadADCData", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
-        public static extern short TryReadADCData(string read_buffer, uint read_size);
+        public static extern short TryReadADCData(byte[] readbuffer, uint readsize);
 
         // 设置IO输出；IO按位输出函数index[0,15] value[0关闭,1打开] 
         [DllImport("wdd.dll", EntryPoint = "SetIoOutput", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
@@ -46,7 +50,7 @@ namespace Hymmc.WDD
          
         // 获取IO输入状态；
         [DllImport("wdd.dll", EntryPoint = "GetIoInput", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
-        public static extern short GetIoInput(int index, ref int value);
+        public static extern short GetIoInput(int index, out uint value);
 
         // 设置输入滤波时间,单位40ns
         [DllImport("wdd.dll", EntryPoint = "SetFilterTime", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
@@ -54,11 +58,11 @@ namespace Hymmc.WDD
 
         // 设置触发IO，index[0,7] enable[0关闭,1打开]
         [DllImport("wdd.dll", EntryPoint = "SetTriggerIo", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
-        public static extern short SetTriggerIo(int index, uint enable);
+        public static extern short SetTriggerIo(int index, byte enable);
 
         // 设置采样电阻，Resistor[3],三路电阻值[1-8]
         [DllImport("wdd.dll", EntryPoint = "SetSampResistor", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.StdCall)]
-        public static extern short SetSampResistor(uint[] Resistor);
+        public static extern short SetSampResistor(byte[] resistor);
 
 
 

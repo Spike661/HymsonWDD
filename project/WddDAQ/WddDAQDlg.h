@@ -49,8 +49,15 @@ protected:
     afx_msg void OnBnClickedStopAcquire();
     afx_msg void OnSysCommand(UINT nID, LPARAM lParam);
     afx_msg void OnPaint();
+    afx_msg void SetAxisRange(double xMin, double xMax, double yMin, double yMax);
     afx_msg HCURSOR OnQueryDragIcon();
+    afx_msg BOOL OnMouseWheel(UINT nFlags, short zDelta, CPoint pt); // 声明消息处理函数
     DECLARE_MESSAGE_MAP()
+
+private:
+    double m_xMin, m_xMax; // X 轴范围
+    double m_yMin, m_yMax; // Y 轴范围
+
 public:
     afx_msg void OnBnClickedSettAcqpara();
     afx_msg void OnBnClickedSetFilterTime();

@@ -32,11 +32,16 @@ HANDLE DllHandMtx = NULL;
 ///////////////////////////////////////////////////////////////////////////////
 HANDLE hRecvThread = NULL;  // 接收数据线程的句柄
 DWORD WINAPI ReceiveDataThread(LPVOID lpParam);
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+HANDLE hProcessingThread = NULL;  // 接收数据线程的句柄
+DWORD WINAPI ProcessingDataThread(LPVOID lpParam);
+///////////////////////////////////////////////////////////////////////////////
 SampPara tSampPrm = { 0 };
 /********************************************************************************************************************************************************************
 															 循环缓冲区
 ********************************************************************************************************************************************************************/
-#define BUFFER_SIZE 3*1024*1000  // 定义缓冲区大小，根据实际需求调整
+#define BUFFER_SIZE  (3*1024*1000)  // 定义缓冲区大小3M，根据实际需求调整
 
 typedef struct {
 	char data[BUFFER_SIZE];
@@ -46,7 +51,8 @@ typedef struct {
 	CRITICAL_SECTION cs;  // 用于同步的临界区
 } CircularBuffer;
 
-CircularBuffer circBuffer;  // 全局循环缓冲区
+CircularBuffer circBuffer;  // 全局循环缓冲区-UDP接收到的原始数据
+CircularBuffer dataBuffer;  // 全局循环缓冲区-校验处理后的数据
 
 // 初始化缓冲区
 void InitBuffer(CircularBuffer* cb) {
@@ -59,6 +65,7 @@ void InitBuffer(CircularBuffer* cb) {
 // 在开始采集前调用此函数
 void InitializeSystem() {
 	InitBuffer(&circBuffer);  // 初始化循环缓冲区
+    InitBuffer(&dataBuffer);  // 初始化循环缓冲区
 	// 其他初始化操作
 }
 
@@ -120,66 +127,58 @@ bool ReadFromBuffer(CircularBuffer* cb, char* data, int length) {
 #define SAMPLE_POINTS 128
 
 // 校验函数，对数据做和校验
-bool CheckSum(const char* data, size_t length, unsigned short expected_checksum) {
-	unsigned short sum = 0;
-	//for (size_t i = 0; i < length; ++i) {
-	//	sum += (unsigned char)data[i];
-	//}  
+bool CheckSum(const unsigned char* data, size_t length, unsigned short expected_checksum) {
+    unsigned int sum = 0; 
     // 每两个字节相加
     for (size_t i = 0; i < length; i += 2) {
         unsigned short pair_sum;
+
         // 检查是否还有一个字节可以配对
         if (i + 1 < length) {
-            pair_sum = (unsigned char)data[i] | ((unsigned char)data[i + 1] << 8);
+            pair_sum = (data[i] | (data[i + 1] << 8)); // 直接构建 pair_sum
         }
         else {
-            pair_sum = (unsigned char)data[i]; // 处理单个字节的情况
+            pair_sum = data[i]; // 处理单个字节的情况
         }
-        sum += pair_sum;
+        sum += pair_sum; // 累加
     }
-	return (sum == expected_checksum);
+    // 取低16位
+    sum = (sum & 0xFFFF) + (sum >> 16); // 处理可能的溢出
+    return (sum == expected_checksum);
 }
 
 // 处理接收到的数据包
-void ProcessDataPacket(unsigned char* buffer, unsigned char* revbuffer, size_t length) {
-	
+void ProcessDataPacket(const unsigned char* buffer, unsigned char* revbuffer, size_t length) {
+    const size_t expected_length = 1280;
+    if (length != expected_length) {
+        DEBUG("Invalid data length %zu, expected 1280 bytes.\n", length);
+        return;
+    }
     unsigned char last_data[DA_DATA_SIZE] = { 0 };
-	if (length != 1280) {
-		DEBUG("Invalid data length, expected 1280 bytes.\n");
-        DEBUG("%zu\n", length);
-		return;
-	}
-
 	// 每次处理 8 字节 DA 数据 + 2 字节校验位
-	for (int i = 0; i < SAMPLE_POINTS; ++i) {
-		// 当前 DA 数据的起始位置
-		int data_start_index = i * (DA_DATA_SIZE + CHECKSUM_SIZE);
-		int data_rev_index = i * DA_DATA_SIZE;
+    for (int i = 0; i < SAMPLE_POINTS; ++i) {
+        size_t data_start_index = i * (DA_DATA_SIZE + CHECKSUM_SIZE);
+        size_t data_rev_index = i * DA_DATA_SIZE;
 
-		// 提取 8 字节的 DA 数据
-		char da_data[DA_DATA_SIZE];
-		memcpy(da_data, &buffer[data_start_index], DA_DATA_SIZE);
+        // 提取 8 字节的 DA 数据
+        unsigned char da_data[DA_DATA_SIZE];
+        memcpy(da_data, &buffer[data_start_index], DA_DATA_SIZE);
 
-		// 提取 2 字节的校验位
-		unsigned short received_checksum = (unsigned char)buffer[data_start_index + DA_DATA_SIZE] |
-			((unsigned char)buffer[data_start_index + DA_DATA_SIZE + 1] << 8);
-		//unsigned short received_checksum =
-		//	(unsigned char)buffer[data_start_index + DA_DATA_SIZE + 1] |  // 高字节
-		//	((unsigned char)buffer[data_start_index + DA_DATA_SIZE] << 8);  // 低字节
+        // 提取 2 字节的校验位
+        unsigned short received_checksum = buffer[data_start_index + DA_DATA_SIZE] |
+            (buffer[data_start_index + DA_DATA_SIZE + 1] << 8);
 
-
-		// 校验
-		if (CheckSum(da_data, DA_DATA_SIZE, received_checksum)) {
-			// 校验通过，将数据返回
-			memcpy(last_data, da_data, DA_DATA_SIZE);	//记录上一次数据
-			memcpy(&revbuffer[data_rev_index], da_data, DA_DATA_SIZE);
-
-		}
-		else {
+        // 校验
+        if (CheckSum(da_data, DA_DATA_SIZE, received_checksum)) {
+            // 校验通过，将数据返回
+            memcpy(last_data, da_data, DA_DATA_SIZE); // 记录上一次数据
+            memcpy(&revbuffer[data_rev_index], da_data, DA_DATA_SIZE);
+        }
+        else {
             DEBUG("Checksum error, data discarded.\n");
-			memcpy(&revbuffer[data_rev_index], last_data, DA_DATA_SIZE);
-		}
-	}
+            memcpy(&revbuffer[data_rev_index], last_data, DA_DATA_SIZE); // 使用上一次的有效数据
+        }
+    }
 }
 /********************************************************************************************************************************************************************
 															  用时检测
@@ -259,44 +258,37 @@ short SendCommand(MSocket& mSkt, T_COMMAND& tCmd, void* sbuf, void* rbuf)
 // 接收码流数据
 short ReceiveData(MSocket& mSkt, T_COMMAND& tCmd, void* rbuf)
 {
-	short rtn = 0;
-	T_COMMAND rCmd = { 0 };
-    unsigned char buff[1500] = { 0 };
-    unsigned char revbuff[1500] = { 0 };
-	if (!mSkt.LinkStus) {
-		return err_link_fail;
-	}
-	rtn = mSkt.RecvData((char*)&rCmd);
-	rCmd.length = rtn - CMD_HEAD;
+    if (!mSkt.LinkStus) {
+        return err_link_fail;
+    }
 
-	//if (rbuf != NULL && rCmd.length > 0) {
-	//	memcpy(rbuf, &rCmd.data[0], rCmd.length);
-	//	tCmd.length = rCmd.length;	//返回数据长度；
-	//}
-	if (rtn > 0) 
+    uint16_t length = 0;
+    T_COMMAND rCmd = { 0 };
+    short rtn = mSkt.RecvData((char*)&rCmd);
+    length = rtn - CMD_HEAD;
+
+	if (rCmd.state == 0xFF)
 	{
-		memcpy(buff, &rCmd.data[0], rCmd.length);
 		double ms = 0;
 		start_click_counter();
 		// 调用处理函数处理接收到的数据包
-		ProcessDataPacket(buff, revbuff, rCmd.length);
-		ms = get_click_counter();
-        DEBUG("ProcessDataPacket: %fms\n", ms);
-
-		if (rbuf != NULL && rCmd.length > 0) {
-			memcpy(rbuf, revbuff, DATA_LENGTH);
-
-            tCmd.head = rCmd.head;      //头
-            tCmd.state = rCmd.state;    //状态码
-            tCmd.cmdno = rCmd.cmdno;    //命令号
-            tCmd.subcmd = rCmd.subcmd;  //子命令号
-			tCmd.length = DATA_LENGTH;  //返回数据长度；
-
-		}
-
+        ProcessDataPacket(&rCmd.data[0], static_cast<unsigned char*>(rbuf), length);
+    	ms = get_click_counter();
+        //DEBUG("校验后:");
+        //for (int i = 0; i < 1024; ++i) {
+        //    DEBUG("%02x ", static_cast<unsigned char>(revbuff[i]));
+        //}
+        //DEBUG("\n");
+        DEBUG("ProcessDataPacket: %fms\n", ms);   
 	}
 
-	return rtn;
+    tCmd.head = rCmd.head;      //头
+    tCmd.state = rCmd.state;    //状态码
+    tCmd.cmdno = rCmd.cmdno;    //命令号
+    tCmd.subcmd = rCmd.subcmd;  //子命令号
+    tCmd.length = rCmd.length;  //返回数据长度；
+
+    return rtn; // 返回接收的字节数
 }
 // 通信测试
 short _stdcall gmc_cmd_test(int idx, uint32_t* data, int count)
@@ -382,33 +374,62 @@ short _stdcall gmc_sampling_mode_time(float time)
 	return rtn;
 }
 
+
 // 接收数据线程函数
 DWORD WINAPI ReceiveDataThread(LPVOID lpParam) {
-	MSocket* pSkt = (MSocket*)lpParam;
+    MSocket* pSkt = (MSocket*)lpParam;
     uint16_t PackageCount = 0;
 
-	while (tSampPrm.Status) {
-		T_COMMAND tCmd = { 0 };
+    T_COMMAND tCmd = { 0 };
+    unsigned char buff[1500] = { 0 };
+
+    while (tSampPrm.Status) {
+        short rtn = ReceiveData(*pSkt, tCmd, buff);
+        if (rtn > 0) {
+            if (tCmd.state == 0xFF) {
+                if (tCmd.subcmd != PackageCount + 1) {
+                    printf("error count: %d\n", tCmd.subcmd);
+                }
+                //printf("Packcount:%d\n", tCmd.subcmd);           
+                PackageCount = tCmd.subcmd;     // 更新包计数
+            }
+
+            if (!WriteToBuffer(&circBuffer, buff, tCmd.length)) {               // 将接收到的数据存储到循环缓冲区
+                DEBUG("Warning: Circular buffer overflow, data discarded.\n");  // 缓冲区写入失败，可能是因为缓冲区满了，丢弃数据
+                return err_write_data; // 返回错误代码
+            }
+        }
+    }
+    return 0;
+}
+
+// 处理数据线程函数
+DWORD WINAPI ProcessingDataThread(LPVOID lpParam) {
+    MSocket* pSkt = (MSocket*)lpParam;
+    uint16_t PackageCount = 0;
+
+    while (tSampPrm.Status) {
+        T_COMMAND tCmd = { 0 };
         unsigned char buff[1500] = { 0 };
-		short rtn = ReceiveData(*pSkt, tCmd, buff);
-		//DEBUG("%d\n", rtn);
-		//DEBUG("%d\n", tCmd.length);
-        if(tCmd.subcmd != PackageCount + 1)
+        short rtn = ReceiveData(*pSkt, tCmd, buff);
+        //DEBUG("%d\n", rtn);
+        //DEBUG("%d\n", tCmd.length);
+        if (tCmd.subcmd != PackageCount + 1)
         {
             printf("error count:%d\n", tCmd.subcmd);
         }
         PackageCount = tCmd.subcmd;
-		if (rtn > 0) {
-			// 处理接收到的数据,将接收到的数据存储到循环缓冲区
-			if (!WriteToBuffer(&circBuffer, buff, tCmd.length)) {
-				// 缓冲区写入失败，可能是因为缓冲区满了，丢弃数据
+        if (rtn > 0) {
+            // 处理接收到的数据,将接收到的数据存储到循环缓冲区
+            if (!WriteToBuffer(&circBuffer, buff, tCmd.length)) {
+                // 缓冲区写入失败，可能是因为缓冲区满了，丢弃数据
                 DEBUG("Warning: Circular buffer overflow, data discarded.\n");
                 return err_write_data;
-			}
-		}
-		tCmd.length = 0;
-	}
-	return 0;
+            }
+        }
+        tCmd.length = 0;
+    }
+    return 0;
 }
 /********************************************************************************************************************************************************************
                                                               API
@@ -420,7 +441,7 @@ short _stdcall gmc_get_lib_version(uint32_t *version)
     return 0;
 }
 // FPGA库版本号  [24082201]十六进制，年-月-日-版本
-short _stdcall gmc_get_fpga_version(uint32_t *fpga)
+short _stdcall gmc_get_fpga_version(uint32_t *fpgaversion)
 {
     short rtn = 0;
     MSocket& pSkt = stMSkt[0];
@@ -431,7 +452,7 @@ short _stdcall gmc_get_fpga_version(uint32_t *fpga)
     uint32_t rData = 0;
     WaitForSingleObject(hmtx[0], INFINITE);
     rtn = SetCommand(pSkt, tCmd, NULL, &rData);
-    if (rtn == 0) { *fpga = rData; }
+    if (rtn == 0) { *fpgaversion = rData; }
     ReleaseMutex(hmtx[0]);
     return rtn;
 
@@ -543,6 +564,16 @@ short _stdcall StartADCCollection()
 		// 线程创建失败，处理错误
 		rtn = err_create_thread;									// 返回错误码
 	}
+    // 创建处理数据线程
+    //if (hProcessingThread != NULL) {
+    //    CloseHandle(hProcessingThread);
+    //    hProcessingThread = NULL;
+    //}
+    //hProcessingThread = CreateThread(NULL, 0, ProcessingDataThread, (LPVOID)&pSkt, 0, NULL);
+    //if (hProcessingThread == NULL) {
+    //    // 线程创建失败，处理错误
+    //    rtn = err_create_thread;									// 返回错误码
+    //}
 	return rtn;
 }
 
@@ -570,19 +601,19 @@ short _stdcall StopADCCollection()
 	return rtn;
 }
 // 读取缓冲区数据；
-short _stdcall TryReadADCData(unsigned char* read_buffer, uint32_t read_size) // 默认1024
+short _stdcall TryReadADCData(unsigned char* readbuffer, uint32_t readsize) // 默认1024
 {
     short rtn = 0;  // 返回值，0表示成功，非0表示失败
     char data[1024];  // 存储读取的数据
-    int length = read_size;  // 假设每次处理1024字节
+    int length = readsize;  // 假设每次处理1024字节
 
     if (ReadFromBuffer(&circBuffer, data, length)) {
         // 成功读取到数据，将数据拷贝到调用者提供的缓冲区
-        memcpy(read_buffer, data, length);
+        memcpy(readbuffer, data, length);
         // 打印读取到的数据
         DEBUG("buffer data:");
         for (int i = 0; i < length; ++i) {
-            DEBUG("%02x ", static_cast<unsigned char>(read_buffer[i]));
+            DEBUG("%02x ", static_cast<unsigned char>(readbuffer[i]));
         }
         DEBUG("\n");
 
@@ -677,11 +708,11 @@ short _stdcall SetTriggerIo(int index, uint8_t enable)
     return rtn;
 }
 //设置采样电阻，Resistor[3],三路电阻值0-7
-short _stdcall SetSampResistor(uint8_t Resistor[3])
+short _stdcall SetSampResistor(uint8_t resistor[3])
 {
-    if (Resistor[0] < 0 || Resistor[0] > 7) { return err_parameter; }
-    if (Resistor[1] < 0 || Resistor[1] > 7) { return err_parameter; }
-    if (Resistor[2] < 0 || Resistor[2] > 7) { return err_parameter; }
+    if (resistor[0] < 0 || resistor[0] > 7) { return err_parameter; }
+    if (resistor[1] < 0 || resistor[1] > 7) { return err_parameter; }
+    if (resistor[2] < 0 || resistor[2] > 7) { return err_parameter; }
     short rtn = 0;
     int cNo = 0;
     uint32_t cmd = 0;
@@ -691,7 +722,7 @@ short _stdcall SetSampResistor(uint8_t Resistor[3])
     tCmd.head = head;
     tCmd.cmdno = cmd_set_sampling_resistor;
     tCmd.length = sizeof(uint32_t);
-    cmd = Resistor[0] | (Resistor[1] << 8) | (Resistor[2] << 16);
+    cmd = resistor[0] | (resistor[1] << 8) | (resistor[2] << 16);
     WaitForSingleObject(hmtx[0], INFINITE);
     rtn = SetCommand(pSkt, tCmd, &cmd, NULL);
     ReleaseMutex(hmtx[0]);
